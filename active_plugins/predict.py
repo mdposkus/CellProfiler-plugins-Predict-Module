@@ -140,6 +140,7 @@ Select the project type which matches the project file specified by
 
         settings += [self.img_segmentation, self.executable, self.project_file, self.project_type]
         settings += [self.mask, self.prediction_mask]
+        settings += [self.ilastik_output]
         return settings
 
     def visible_settings(self):
