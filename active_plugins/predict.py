@@ -129,6 +129,11 @@ Select the project type which matches the project file specified by
             "Include Prediction Mask?",
             ["No", "Yes"],
             "No")
+        
+        self.ilastik_output = Choice(
+            "Export Type",
+            ["Probability Map", "Segmentation"],
+            "Probability Map")
 
     def settings(self):
         settings = super(Predict, self).settings()
@@ -145,9 +150,9 @@ Select the project type which matches the project file specified by
             visible_settings += [self.img_probability, self.executable, self.project_file, self.project_type]
         elif self.project_type.value == "Pixel Classification":
             if self.prediction_mask.value == "Yes":
-                visible_settings += [self.prediction_mask, self.mask, self.executable, self.project_file, self.project_type]
+                visible_settings += [self.prediction_mask, self.mask, self.ilastik_output, self.executable, self.project_file, self.project_type]
             elif self.prediction_mask.value == "No":
-                visible_settings += [self.prediction_mask, self.executable, self.project_file, self.project_type]
+                visible_settings += [self.prediction_mask, self.ilastik_output, self.executable, self.project_file, self.project_type]
             
             
         else:
@@ -170,7 +175,10 @@ Select the project type which matches the project file specified by
         ]
 
         if self.project_type.value in ["Pixel Classification"]:
-            cmd += ["--export_source", "Probabilities"]
+            if self.ilastik_output.value == "Probability Map":
+                cmd += ["--export_source", "Probabilities"]
+            elif self.ilastik_output.value == "Segmentation":
+                cmd += ["--export_source", "Simple Segmentation"]
             cmd += ["--raw_data", fin.name]
             if self.prediction_mask.value in ["Yes"]:
                 fmask = tempfile.NamedTemporaryFile(suffix=".h5", delete=False)
@@ -182,7 +190,6 @@ Select the project type which matches the project file specified by
 
                     f.create_dataset("data", shape, data=fmask_image.pixel_data)
                 fmask.close()
-            #cmd += [fin.name]
         elif self.project_type.value in ["Autocontext (2-stage)"]:
             x_data = skimage.img_as_ubyte(
                 x_data
@@ -244,16 +251,18 @@ Select the project type which matches the project file specified by
 
             with h5py.File(fout.name, "r") as f:
                 y_data = f["exported_data"][()]
-            y_data = y_data[:,:,0]
+            y_data = y_data[:,:,:]
+            y_data = numpy.squeeze(y_data)
             y = Image(y_data)
             
             counter = 0
-            while sum(sum(y_data)) == 0 and counter < 5:
+            while not numpy.any(y_data) and counter < 5:
                 subprocess.check_call(cmd)
                 counter = counter + 1
                 with h5py.File(fout.name, "r") as f:
                     y_data = f["exported_data"][()]
-                    y_data = y_data[:,:,0]
+                    y_data = y_data[:,:,:]
+                    y_data = numpy.squeeze(y_data)
                 y = Image(y_data)
 
             workspace.image_set.add(self.y_name.value, y)
@@ -274,6 +283,9 @@ Select the project type which matches the project file specified by
         except IOError as ioe:
             raise ioe
         finally:
-            os.unlink(fin.name)
-
-            os.unlink(fout.name)
+                os.unlink(fin.name)
+                os.unlink(fout.name)
+                #os.unlink(fin_probability.name)
+                #os.unlink(fin_segmentation.name)
+                #os.unlink(fout_table.name)
+                #os.unlink(fmask.name)
